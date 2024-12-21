@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freestyle Rap Word Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background-color: #333;
+            color: white;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .word {
+            font-size: 2em;
+            margin: 20px 0;
+            word-wrap: break-word;
+        }
+
+        .definition {
+            font-size: 1.2em;
+            margin: 10px 0;
+            color: #ccc;
+            word-wrap: break-word;
+        }
+
+        .controls {
+            margin: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .controls label,
+        .controls input,
+        .controls button {
+            font-size: 1em;
+        }
+
+        .controls button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            border: none;
+            background-color: #555;
+            color: white;
+            border-radius: 5px;
+        }
+
+        .controls button:disabled {
+            background-color: #888;
+            cursor: not-allowed;
+        }
+
+        .controls button:hover:enabled {
+            background-color: #444;
+        }
+
+        .bar {
+            width: 100%;
+            max-width: 600px;
+            height: 20px;
+            background-color: #444;
+            margin: 20px auto;
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background-color: #e60000;
+            width: 0%;
+            transition: width linear;
+        }
+
+        .beat-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            margin-bottom: 20px;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .word {
+                font-size: 1.5em;
+            }
+
+            .definition {
+                font-size: 1em;
+            }
+
+            .controls input {
+                width: 60px;
+            }
+
+            .controls button {
+                padding: 8px 16px;
+            }
+
+            .bar {
+                max-width: 100%;
+            }
+
+            .beat-cover {
+                height: 250px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .word {
+                font-size: 1.2em;
+            }
+
+            .definition {
+                font-size: 0.9em;
+            }
+
+            .controls input {
+                width: 50px;
+            }
+
+            .controls button {
+                padding: 6px 12px;
+            }
+
+            .bar {
+                max-width: 100%;
+            }
+
+            .beat-cover {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Freestyle Rap Word Generator</h1>
+    <div class="beat-cover" id="beatCover" style="width: 100%; height: 300px;"></div>
+    <div class="word" id="wordDisplay">Press Start</div>
+    <div class="definition" id="definitionDisplay"></div>
+    <div class="controls">
+        <button id="startStopButton" onclick="startStopTimer()">Start</button>
+        <button onclick="updateWord()">Change Word</button>
+        <button onclick="nextBeat()">Next Beat</button>
+    </div>
+    <div class="bar">
+        <div class="bar-fill" id="barFill"></div>
+    </div>
+
+    <audio id="audioPlayer" controls style="display: none;"></audio>
+
+    <script>
+        let timer;
+        let barTimer;
+        let barCount = 0;
+        let isBeatLoaded = false;
+        let currentBeatIndex = 0;
+        let currentBpm = 0;  // Store the current BPM
+        const playlistData = [];
+        const playlistIds = ["1845963", "425330", "5312520", "91549", "1398487"];
+        const audioPlayer = document.getElementById('audioPlayer');
+        const beatCover = document.getElementById('beatCover');
+        const startStopButton = document.getElementById('startStopButton');
+
+        // Ensure DOM is fully loaded before running
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAllPlaylistsData();
+        });
+
+        // Fetch playlists data and populate playlistData
+        async function fetchAllPlaylistsData() {
+            try {
+                for (const playlistId of playlistIds) {
+                    const response = await fetch(`https://main.v2.beatstars.com/playlist?id=${playlistId}&fields=details,items&item_fields=details,stats,licenses&list_limit=300`);
+                    const data = await response.json();
+
+                    if (data.status && data.response && data.response.data.items) {
+                        const items = data.response.data.items;
+                        items.forEach(item => {
+                            const bpm = item.details.bpm;
+                            const audioUrl = item.details.stream_url;
+                            const artworkUrl = item.details.artwork ? item.details.artwork.original : null;
+                            if (audioUrl && artworkUrl && bpm) {
+                                playlistData.push({ audioUrl, artworkUrl, bpm });
+                            }
+                        });
+                    }
+                }
+
+                if (playlistData.length > 0) {
+                    isBeatLoaded = true;
+                    loadRandomBeat();
+                }
+            } catch (error) {
+                console.error('Error fetching playlists data:', error);
+            }
+        }
+
+        function loadRandomBeat() {
+            if (isBeatLoaded) {
+                const randomIndex = Math.floor(Math.random() * playlistData.length);
+                const selectedBeat = playlistData[randomIndex];
+                audioPlayer.src = selectedBeat.audioUrl;
+                beatCover.innerHTML = `<img src="${selectedBeat.artworkUrl}" alt="Beat Cover">`;
+                currentBeatIndex = randomIndex;  // Update the current beat index
+                currentBpm = selectedBeat.bpm;  // Set the BPM from the selected beat
+
+                // Preload the next beat
+                const nextBeatIndex = (currentBeatIndex + 1) % playlistData.length;
+                const nextBeat = playlistData[nextBeatIndex];
+                const nextAudio = new Audio(nextBeat.audioUrl);
+                nextAudio.preload = "auto";  // Preload next beat audio
+            }
+        }
+
+        async function fetchRandomUrbanWord() {
+            try {
+                const response = await fetch('https://api.urbandictionary.com/v0/random');
+                const data = await response.json();
+                if (data && data.list && data.list.length > 0) {
+                    return { word: data.list[0].word, source: 'urban' };
+                } else {
+                    return { word: "No word found", source: 'urban' };
+                }
+            } catch (error) {
+                console.error("Error fetching urban word:", error);
+                return { word: "Error", source: 'urban' };
+            }
+        }
+
+        async function fetchWordDefinition(word, source) {
+            try {
+                const response = source === 'urban'
+                    ? await fetch(`https://api.urbandictionary.com/v0/define?term=${word}`)
+                    : await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+                const data = await response.json();
+                return source === 'urban'
+                    ? data.list?.[0]?.definition || "No definition available"
+                    : data[0]?.meanings?.[0]?.definitions?.[0]?.definition || "No definition available";
+            } catch (error) {
+                console.error(`Error fetching ${source} definition:`, error);
+                return "Error";
+            }
+        }
+
+        async function updateWord() {
+            const { word, source } = await fetchRandomUrbanWord();
+            document.getElementById('wordDisplay').textContent = word;
+            const definition = await fetchWordDefinition(word, source);
+            document.getElementById('definitionDisplay').textContent = definition;
+        }
+
+        function startStopTimer() {
+            if (!isBeatLoaded) return alert('Please wait for beats to load.');
+
+            if (startStopButton.textContent === "Start") {
+                const interval = 60000 / currentBpm; // Use the fetched BPM
+
+                // Start the timer
+                timer = setInterval(() => {
+                    barCount = (barCount + 1) % 4;
+                    if (barCount === 0) updateWord();
+                    resetBar();
+                }, interval);
+
+                // Update the bar fill
+                barTimer = setInterval(fillBar, interval / 100);
+                audioPlayer.play();
+
+                // Update the button to "Stop"
+                startStopButton.textContent = "Stop";
+                updateWord();  // Show a new word when starting
+            } else {
+                // Stop the timer
+                stopTimer();
+            }
+        }
+
+        function stopTimer() {
+            clearInterval(timer);
+            clearInterval(barTimer);
+            resetBar(true);
+            audioPlayer.pause();
+            startStopButton.textContent = "Start";  // Reset button to "Start"
+        }
+
+        function resetBar(clear = false) {
+            document.getElementById('barFill').style.width = clear ? '0%' : '0%';
+        }
+
+        function fillBar() {
+            const barFill = document.getElementById('barFill');
+            const currentWidth = parseFloat(barFill.style.width) || 0;
+            if (currentWidth < 100) barFill.style.width = `${currentWidth + 1}%`;
+        }
+
+        function nextBeat() {
+            loadRandomBeat();  // Load a new beat
+            audioPlayer.play();  // Immediately play the new beat
+        }
+    </script>
+</body>
+
+</html>
